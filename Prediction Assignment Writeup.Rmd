@@ -1,0 +1,127 @@
+---
+title: "Prediction Assignment Writeup"
+author: "YN"
+date: "April 23, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Preparing the data
+
+
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle) 
+ 
+training <- read.csv("pml-training.csv", na.strings = c("NA", "#DIV/0!", ""))
+testing  <- read.csv("pml-testing.csv",  na.strings = c("NA", "#DIV/0!", ""))
+str(training, list.len=15)
+table(training$classe)
+prop.table(table(training$user_name, training$classe), 1)
+prop.table(table(training$classe))
+
+```
+## Cleaning the data
+Based on the above information, let's first do some basic data clean-up by removing columns 1 to 6, which are there just for information and reference purposes and removing all columns that are mostly NA:
+ 
+
+```{r}
+ training <- training[, 7:160]
+testing  <- testing[, 7:160]
+is_data  <- apply(!is.na(training), 2, sum) > 19621  # which is the number of observations
+training <- training[, is_data]
+testing  <- testing[, is_data]
+
+```
+ Before we can move forward with data analysis, we split the training set into two for cross validation purposes. We randomly subsample 60% of the set for training purposes (actual model building), while the 40% remainder will be used only for testing, evaluation and accuracy measurement.
+```{r} 
+ 
+set.seed(3141592)
+inTrain <- createDataPartition(y=training$classe, p=0.60, list=FALSE)
+train1  <- training[inTrain,]
+train2  <- training[-inTrain,]
+dim(train1)
+dim(train2)
+```
+The caret library that we are using can be either loaded directly from CRAN using the command install.packages("caret") in R, or downloaded from the caret website. The website also includes a somewhat comprehensive documentation.
+
+
+At this stage, train1 is the training data set (it contains 11776 observations, or about 60% of the entire training data set), and train2 is the testing data set (it contains 7846 observations, or about 40% of the entire training data set). The dataset train2 will never be looked at, and will be used only for accuracy measurements.
+
+
+We can now [i] identify the "zero covariates"" from train1 and [ii] remove these "zero covariates"" from both train1 and train2:
+```{r}
+nzv_cols <- nearZeroVar(train1)
+if(length(nzv_cols) > 0) {
+  train1 <- train1[, -nzv_cols]
+  train2 <- train2[, -nzv_cols]
+}
+dim(train1)
+dim(train2)
+  
+```
+This step didn't do anything as the earlier removal of NA was sufficient to clean the data. We are satisfied that we now have 53 clean covariates to build a model for classe (which is the 54th column of the data set).
+
+
+## Prediction Model Building
+We now create our model using the functions provided in caret package in R. ## Tree Method Using the Tree method to do the prediction of 'classe'.
+
+ ```{r}
+modfit1 <- train(classe ~ .,method='rpart',data=train1)
+fancyRpartPlot(modfit1$finalModel) 
+
+pred=predict(modfit1,newdata=train2)
+z=confusionMatrix(pred,train2$classe)
+z$table
+
+z$overall[1]
+```
+
+From the confusion matrix it is clear the accuracy of "0.49" for this model fit clearly shows "no purity" hence this model fit is rejected.
+
+
+Using Random forest method to do the prediction.
+```{r}
+library(randomForest)
+modfit2=randomForest(classe~., data=train1, method='class')
+pred2 = predict(modfit2,train2,type='class')
+qplot(roll_belt, magnet_dumbbell_y, colour=classe, data=train1)
+```
+This graph suggests that we could probably categorize the data into groups based on roll_belt values.
+
+provides 99% accurancy hence this model has been choosen to do predict the testing data set.
+```{r}
+    z2=confusionMatrix(pred2,train2$classe)
+    z2$table
+    
+    z2$overall[1]
+```    
+
+ 
+
+##Conclusion
+
+From the above results the random forest method provides the best fit model and it is been considered for testing the test data set to submit results.
+
+```{r}
+
+ pred3 =  predict(modfit2,testing,type='class')
+    nofiles = length(pred3)
+    for (i in 1:nofiles){
+        filename =  paste0("problem_id",i,".txt")
+        write.table(pred3[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+    pred3
+    
+```
+    
+
